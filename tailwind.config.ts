@@ -14,7 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        roboto: ['Roboto', 'sans-serif'],
+        inter: ['Inter', 'sans-serif'],
+        display: ['Space Grotesk', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -60,21 +61,25 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        mytube: {
-          red: "hsl(var(--mytube-red))",
-          "red-hover": "hsl(var(--mytube-red-hover))",
-          chip: "hsl(var(--mytube-chip))",
-          "chip-active": "hsl(var(--mytube-chip-active))",
-          "chip-foreground": "hsl(var(--mytube-chip-foreground))",
-          "chip-active-foreground": "hsl(var(--mytube-chip-active-foreground))",
-          overlay: "hsl(var(--mytube-overlay))",
-          hover: "hsl(var(--mytube-hover))",
+        stream: {
+          primary: "hsl(var(--stream-primary))",
+          secondary: "hsl(var(--stream-secondary))",
+          card: "hsl(var(--stream-card))",
+          "card-hover": "hsl(var(--stream-card-hover))",
+          chip: "hsl(var(--stream-chip))",
+          "chip-active": "hsl(var(--stream-chip-active))",
+          "chip-foreground": "hsl(var(--stream-chip-foreground))",
+          "chip-active-foreground": "hsl(var(--stream-chip-active-foreground))",
+          overlay: "hsl(var(--stream-overlay))",
+          glass: "hsl(var(--stream-glass))",
         },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xl: "calc(var(--radius) + 4px)",
+        "2xl": "calc(var(--radius) + 8px)",
       },
       keyframes: {
         "accordion-down": {
@@ -93,12 +98,26 @@ export default {
           from: { opacity: "0", transform: "scale(0.95)" },
           to: { opacity: "1", transform: "scale(1)" },
         },
+        "slide-up": {
+          from: { opacity: "0", transform: "translateY(20px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        shimmer: {
+          "100%": { transform: "translateX(100%)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "fade-in": "fade-in 0.3s ease-out",
+        "fade-in": "fade-in 0.4s ease-out",
         "scale-in": "scale-in 0.2s ease-out",
+        "slide-up": "slide-up 0.5s ease-out",
+        shimmer: "shimmer 2s infinite",
+      },
+      boxShadow: {
+        glow: "0 0 40px hsl(var(--primary) / 0.3)",
+        "glow-accent": "0 0 40px hsl(var(--accent) / 0.3)",
+        soft: "0 2px 20px hsl(var(--foreground) / 0.05)",
       },
     },
   },
