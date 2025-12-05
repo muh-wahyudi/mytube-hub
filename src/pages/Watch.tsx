@@ -1,10 +1,9 @@
-import { useState, useMemo } from "react";
-import { useSearchParams, Link } from "react-router-dom";
+import { useState, useEffect, useMemo } from "react";
+import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { 
   ThumbsUp, 
   ThumbsDown, 
   Share2, 
-  Download, 
   MoreHorizontal, 
   ChevronDown, 
   ChevronUp,
@@ -14,33 +13,272 @@ import {
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import VideoCard from "@/components/VideoCard";
+import UserAvatar from "@/components/UserAvatar";
+import Comments from "@/components/Comments";
 import { Button } from "@/components/ui/button";
 import { videos } from "@/data/videos";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+
+interface DBVideo {
+  id: string;
+  title: string;
+  description: string | null;
+  thumbnail_url: string;
+  embed_link: string;
+  category: string;
+  views: number;
+  created_at: string;
+  user_id: string;
+  profiles: {
+    id: string;
+    channel_name: string;
+    channel_avatar: string | null;
+    avatar_bg_color: string;
+    avatar_text_color: string;
+  };
+}
 
 const Watch = () => {
   const [searchParams] = useSearchParams();
   const videoID = searchParams.get("v");
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const [liked, setLiked] = useState<"like" | "dislike" | null>(null);
+  const [isLiked, setIsLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [subscriberCount, setSubscriberCount] = useState(0);
+  const [dbVideo, setDbVideo] = useState<DBVideo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [recommendedVideos, setRecommendedVideos] = useState<any[]>([]);
 
-  const currentVideo = useMemo(() => {
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  // Check if it's a local video from data/videos.ts
+  const localVideo = useMemo(() => {
     return videos.find((v) => v.videoID === videoID);
   }, [videoID]);
 
-  const recommendedVideos = useMemo(() => {
-    return videos.filter((v) => v.videoID !== videoID).slice(0, 8);
-  }, [videoID]);
+  useEffect(() => {
+    if (!videoID) {
+      navigate('/');
+      return;
+    }
 
-  if (!currentVideo) {
+    const fetchVideo = async () => {
+      setLoading(true);
+      
+      // First check if it's a local video
+      if (localVideo) {
+        setLoading(false);
+        // Get recommended videos from local
+        const recs = videos.filter((v) => v.videoID !== videoID).slice(0, 8);
+        setRecommendedVideos(recs.map(v => ({
+          videoID: v.videoID,
+          title: v.title,
+          channelName: v.channelName,
+          thumbnail: v.thumbnail,
+          channelAvatar: v.channelAvatar,
+          views: v.views,
+          uploadDate: v.uploadDate,
+          embedLink: v.embedLink,
+          description: v.description,
+          category: v.category,
+          duration: v.duration
+        })));
+        return;
+      }
+
+      // Fetch from database
+      const { data, error } = await supabase
+        .from('videos')
+        .select(`
+          id,
+          title,
+          description,
+          thumbnail_url,
+          embed_link,
+          category,
+          views,
+          created_at,
+          user_id,
+          profiles (
+            id,
+            channel_name,
+            channel_avatar,
+            avatar_bg_color,
+            avatar_text_color
+          )
+        `)
+        .eq('id', videoID)
+        .maybeSingle();
+
+      if (error || !data) {
+        setLoading(false);
+        return;
+      }
+
+      setDbVideo(data as DBVideo);
+
+      // Update views
+      await supabase
+        .from('videos')
+        .update({ views: (data.views || 0) + 1 })
+        .eq('id', videoID);
+
+      // Get like count
+      const { count: likes } = await supabase
+        .from('likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('video_id', videoID);
+      setLikeCount(likes || 0);
+
+      // Get subscriber count
+      const { count: subs } = await supabase
+        .from('subscriptions')
+        .select('*', { count: 'exact', head: true })
+        .eq('channel_id', data.user_id);
+      setSubscriberCount(subs || 0);
+
+      // Check if user liked this video
+      if (user) {
+        const { data: likeData } = await supabase
+          .from('likes')
+          .select('id')
+          .eq('video_id', videoID)
+          .eq('user_id', user.id)
+          .maybeSingle();
+        setIsLiked(!!likeData);
+
+        // Check if user subscribed
+        const { data: subData } = await supabase
+          .from('subscriptions')
+          .select('id')
+          .eq('channel_id', data.user_id)
+          .eq('subscriber_id', user.id)
+          .maybeSingle();
+        setIsSubscribed(!!subData);
+      }
+
+      // Fetch recommended videos from DB
+      const { data: dbRecs } = await supabase
+        .from('videos')
+        .select(`
+          id,
+          title,
+          thumbnail_url,
+          views,
+          created_at,
+          profiles (
+            channel_name,
+            channel_avatar,
+            avatar_bg_color,
+            avatar_text_color
+          )
+        `)
+        .neq('id', videoID)
+        .limit(8);
+
+      const formattedRecs = (dbRecs || []).map((v: any) => ({
+        videoID: v.id,
+        title: v.title,
+        channelName: v.profiles.channel_name,
+        thumbnail: v.thumbnail_url,
+        channelAvatar: v.profiles.channel_avatar,
+        avatarBgColor: v.profiles.avatar_bg_color,
+        avatarTextColor: v.profiles.avatar_text_color,
+        views: `${v.views}`,
+        uploadDate: new Date(v.created_at).toLocaleDateString('id-ID'),
+        embedLink: '',
+        description: '',
+        category: ''
+      }));
+
+      // Add local videos to recommendations
+      const localRecs = videos.slice(0, 4).map(v => ({
+        videoID: v.videoID,
+        title: v.title,
+        channelName: v.channelName,
+        thumbnail: v.thumbnail,
+        channelAvatar: v.channelAvatar,
+        views: v.views,
+        uploadDate: v.uploadDate,
+        embedLink: v.embedLink,
+        description: v.description,
+        category: v.category,
+        duration: v.duration
+      }));
+
+      setRecommendedVideos([...formattedRecs, ...localRecs].slice(0, 8));
+      setLoading(false);
+    };
+
+    fetchVideo();
+  }, [videoID, user, localVideo, navigate]);
+
+  const handleLike = async () => {
+    if (!user) {
+      toast({ title: 'Login diperlukan', description: 'Silakan login untuk like video', variant: 'destructive' });
+      return;
+    }
+
+    if (!dbVideo) return;
+
+    if (isLiked) {
+      await supabase.from('likes').delete().eq('video_id', dbVideo.id).eq('user_id', user.id);
+      setIsLiked(false);
+      setLikeCount(prev => prev - 1);
+    } else {
+      await supabase.from('likes').insert({ video_id: dbVideo.id, user_id: user.id });
+      setIsLiked(true);
+      setLikeCount(prev => prev + 1);
+    }
+  };
+
+  const handleSubscribe = async () => {
+    if (!user) {
+      toast({ title: 'Login diperlukan', description: 'Silakan login untuk subscribe', variant: 'destructive' });
+      return;
+    }
+
+    if (!dbVideo) return;
+
+    if (user.id === dbVideo.user_id) {
+      toast({ title: 'Error', description: 'Tidak bisa subscribe channel sendiri', variant: 'destructive' });
+      return;
+    }
+
+    if (isSubscribed) {
+      await supabase.from('subscriptions').delete().eq('channel_id', dbVideo.user_id).eq('subscriber_id', user.id);
+      setIsSubscribed(false);
+      setSubscriberCount(prev => prev - 1);
+    } else {
+      await supabase.from('subscriptions').insert({ channel_id: dbVideo.user_id, subscriber_id: user.id });
+      setIsSubscribed(true);
+      setSubscriberCount(prev => prev + 1);
+    }
+  };
+
+  // Handle search navigation
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    if (value) {
+      navigate(`/?search=${encodeURIComponent(value)}`);
+    }
+  };
+
+  // Video not found
+  if (!loading && !localVideo && !dbVideo) {
     return (
       <div className="min-h-screen bg-background">
         <Header
           onMenuClick={() => setSidebarOpen(!sidebarOpen)}
           searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
+          onSearchChange={handleSearchChange}
         />
         <div className="flex items-center justify-center h-[calc(100vh-64px)] mt-16">
           <div className="text-center px-4">
@@ -60,12 +298,50 @@ const Watch = () => {
     );
   }
 
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header
+          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+          searchQuery={searchQuery}
+          onSearchChange={handleSearchChange}
+        />
+        <div className="flex items-center justify-center h-[calc(100vh-64px)] mt-16">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Determine which video to display
+  const currentVideo = localVideo || (dbVideo ? {
+    title: dbVideo.title,
+    channelName: dbVideo.profiles.channel_name,
+    channelAvatar: dbVideo.profiles.channel_avatar || undefined,
+    avatarBgColor: dbVideo.profiles.avatar_bg_color,
+    avatarTextColor: dbVideo.profiles.avatar_text_color,
+    thumbnail: dbVideo.thumbnail_url,
+    views: `${dbVideo.views}`,
+    uploadDate: new Date(dbVideo.created_at).toLocaleDateString('id-ID'),
+    embedLink: dbVideo.embed_link,
+    videoID: dbVideo.id,
+    description: dbVideo.description || '',
+    subscriberCount: `${subscriberCount}`,
+    likes: `${likeCount}`,
+    category: dbVideo.category
+  } : null);
+
+  if (!currentVideo) return null;
+
+  const isDBVideo = !!dbVideo;
+
   return (
     <div className="min-h-screen bg-background">
       <Header
         onMenuClick={() => setSidebarOpen(!sidebarOpen)}
         searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
+        onSearchChange={handleSearchChange}
       />
       <Sidebar isOpen={sidebarOpen} />
 
@@ -93,33 +369,45 @@ const Watch = () => {
                 {/* Channel Info */}
                 <div className="flex items-center gap-4">
                   <Link to="/">
-                    <div className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-primary/20 hover:ring-primary/50 transition-all">
-                      <img
-                        src={currentVideo.channelAvatar}
-                        alt={currentVideo.channelName}
-                        className="w-full h-full object-cover"
+                    {currentVideo.channelAvatar ? (
+                      <div className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-primary/20 hover:ring-primary/50 transition-all">
+                        <img
+                          src={currentVideo.channelAvatar}
+                          alt={currentVideo.channelName}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <UserAvatar
+                        avatar={null}
+                        channelName={currentVideo.channelName}
+                        bgColor={currentVideo.avatarBgColor || '#6366f1'}
+                        textColor={currentVideo.avatarTextColor || '#ffffff'}
+                        size="lg"
                       />
-                    </div>
+                    )}
                   </Link>
                   <div className="flex-1 min-w-0">
                     <Link to="/" className="font-semibold hover:text-primary transition-colors">
                       {currentVideo.channelName}
                     </Link>
                     <p className="text-sm text-muted-foreground">
-                      {currentVideo.subscriberCount} subscriber
+                      {isDBVideo ? `${subscriberCount} subscriber` : currentVideo.subscriberCount + ' subscriber'}
                     </p>
                   </div>
-                  <Button
-                    onClick={() => setIsSubscribed(!isSubscribed)}
-                    className={`rounded-xl px-5 transition-all duration-300 ${
-                      isSubscribed
-                        ? "bg-secondary text-secondary-foreground hover:bg-muted"
-                        : "gradient-bg text-primary-foreground hover:opacity-90 shadow-glow"
-                    }`}
-                  >
-                    {isSubscribed && <Check className="w-4 h-4 mr-1.5" />}
-                    {isSubscribed ? "Subscribed" : "Subscribe"}
-                  </Button>
+                  {isDBVideo && (
+                    <Button
+                      onClick={handleSubscribe}
+                      className={`rounded-xl px-5 transition-all duration-300 ${
+                        isSubscribed
+                          ? "bg-secondary text-secondary-foreground hover:bg-muted"
+                          : "gradient-bg text-primary-foreground hover:opacity-90 shadow-glow"
+                      }`}
+                    >
+                      {isSubscribed && <Check className="w-4 h-4 mr-1.5" />}
+                      {isSubscribed ? "Subscribed" : "Subscribe"}
+                    </Button>
+                  )}
                 </div>
 
                 {/* Action Buttons */}
@@ -128,19 +416,20 @@ const Watch = () => {
                   <div className="flex items-center bg-secondary/70 rounded-xl overflow-hidden">
                     <Button
                       variant="ghost"
-                      className={`rounded-none px-4 gap-2 h-10 ${liked === "like" ? "bg-primary/20 text-primary" : ""}`}
-                      onClick={() => setLiked(liked === "like" ? null : "like")}
+                      className={`rounded-none px-4 gap-2 h-10 ${isLiked ? "bg-primary/20 text-primary" : ""}`}
+                      onClick={isDBVideo ? handleLike : undefined}
                     >
-                      <ThumbsUp className={`w-4 h-4 ${liked === "like" ? "fill-current" : ""}`} />
-                      <span className="text-sm font-medium">{currentVideo.likes}</span>
+                      <ThumbsUp className={`w-4 h-4 ${isLiked ? "fill-current" : ""}`} />
+                      <span className="text-sm font-medium">
+                        {isDBVideo ? likeCount : currentVideo.likes}
+                      </span>
                     </Button>
                     <div className="w-px h-6 bg-border" />
                     <Button
                       variant="ghost"
-                      className={`rounded-none px-4 h-10 ${liked === "dislike" ? "bg-accent/20 text-accent" : ""}`}
-                      onClick={() => setLiked(liked === "dislike" ? null : "dislike")}
+                      className="rounded-none px-4 h-10"
                     >
-                      <ThumbsDown className={`w-4 h-4 ${liked === "dislike" ? "fill-current" : ""}`} />
+                      <ThumbsDown className="w-4 h-4" />
                     </Button>
                   </div>
 
@@ -195,13 +484,19 @@ const Watch = () => {
                 </Button>
               </div>
 
-              {/* Comments Section Placeholder */}
-              <div className="mt-6 p-5 bg-secondary/30 rounded-2xl border border-border/50">
-                <h3 className="font-display font-semibold mb-4">Komentar</h3>
-                <p className="text-sm text-muted-foreground">
-                  Komentar dinonaktifkan untuk video ini.
-                </p>
-              </div>
+              {/* Comments Section */}
+              {isDBVideo && dbVideo && (
+                <Comments videoId={dbVideo.id} />
+              )}
+              
+              {!isDBVideo && (
+                <div className="mt-6 p-5 bg-secondary/30 rounded-2xl border border-border/50">
+                  <h3 className="font-display font-semibold mb-4">Komentar</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Komentar hanya tersedia untuk video yang diupload pengguna.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

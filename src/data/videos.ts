@@ -1,16 +1,18 @@
 export interface Video {
   title: string;
   channelName: string;
-  channelAvatar: string;
+  channelAvatar?: string;
+  avatarBgColor?: string;
+  avatarTextColor?: string;
   thumbnail: string;
-  duration: string;
+  duration?: string;
   views: string;
   uploadDate: string;
   embedLink: string;
   videoID: string;
   description: string;
-  subscriberCount: string;
-  likes: string;
+  subscriberCount?: string;
+  likes?: string;
   category: string;
 }
 
