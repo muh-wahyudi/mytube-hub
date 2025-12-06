@@ -1,8 +1,17 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Menu, Search, Mic, Video, Bell, User, X, Sparkles } from "lucide-react";
+import { Menu, Search, Mic, Video, Bell, LogIn, X, Sparkles, LogOut, Settings, Film } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/contexts/AuthContext";
+import UserAvatar from "./UserAvatar";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -14,6 +23,7 @@ const Header = ({ onMenuClick, searchQuery, onSearchChange }: HeaderProps) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const navigate = useNavigate();
+  const { user, profile, signOut } = useAuth();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,6 +34,11 @@ const Header = ({ onMenuClick, searchQuery, onSearchChange }: HeaderProps) => {
   const clearSearch = () => {
     setLocalSearch("");
     onSearchChange("");
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
   };
 
   return (
@@ -105,30 +120,90 @@ const Header = ({ onMenuClick, searchQuery, onSearchChange }: HeaderProps) => {
           <Search className="h-5 w-5" />
         </Button>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="rounded-xl hover:bg-secondary hidden sm:flex"
-        >
-          <Video className="h-5 w-5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="rounded-xl hover:bg-secondary hidden sm:flex relative"
-        >
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-accent" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="rounded-xl hover:bg-secondary ml-1"
-        >
-          <div className="h-9 w-9 rounded-xl gradient-bg flex items-center justify-center">
-            <User className="h-5 w-5 text-primary-foreground" />
-          </div>
-        </Button>
+        {user ? (
+          <>
+            {/* Upload Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-xl hover:bg-secondary hidden sm:flex"
+              onClick={() => navigate("/upload")}
+            >
+              <Video className="h-5 w-5" />
+            </Button>
+
+            {/* Notifications */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-xl hover:bg-secondary hidden sm:flex relative"
+            >
+              <Bell className="h-5 w-5" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-accent" />
+            </Button>
+
+            {/* User Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-xl hover:bg-secondary ml-1"
+                >
+                  <UserAvatar
+                    channelName={profile?.channel_name || "User"}
+                    avatar={profile?.channel_avatar || null}
+                    bgColor={profile?.avatar_bg_color || '#6366f1'}
+                    textColor={profile?.avatar_text_color || '#ffffff'}
+                    size="sm"
+                  />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <div className="flex items-center gap-3 p-3">
+                  <UserAvatar
+                    channelName={profile?.channel_name || "User"}
+                    avatar={profile?.channel_avatar || null}
+                    bgColor={profile?.avatar_bg_color || '#6366f1'}
+                    textColor={profile?.avatar_text_color || '#ffffff'}
+                    size="md"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{profile?.channel_name}</p>
+                    <p className="text-xs text-muted-foreground truncate">@{profile?.username}</p>
+                  </div>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate("/my-videos")}>
+                  <Film className="h-4 w-4 mr-2" />
+                  Video Saya
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/upload")}>
+                  <Video className="h-4 w-4 mr-2" />
+                  Upload Video
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/settings")}>
+                  <Settings className="h-4 w-4 mr-2" />
+                  Pengaturan
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Keluar
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        ) : (
+          <Button
+            variant="outline"
+            className="rounded-xl border-primary text-primary hover:bg-primary/10"
+            onClick={() => navigate("/auth")}
+          >
+            <LogIn className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">Login</span>
+          </Button>
+        )}
       </div>
     </header>
   );
