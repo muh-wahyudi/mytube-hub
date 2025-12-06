@@ -14,6 +14,7 @@ import LikedVideos from "./pages/LikedVideos";
 import Subscriptions from "./pages/Subscriptions";
 import Settings from "./pages/Settings";
 import Explore from "./pages/Explore";
+import History from "./pages/History";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,7 @@ const App = () => (
             <Route path="/subscriptions" element={<Subscriptions />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/explore" element={<Explore />} />
+            <Route path="/history" element={<History />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

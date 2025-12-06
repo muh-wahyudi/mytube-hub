@@ -3,33 +3,27 @@ import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import CategoryChips from "@/components/CategoryChips";
 import VideoGrid from "@/components/VideoGrid";
-import { videos, categories } from "@/data/videos";
+import VideoGridSkeleton from "@/components/VideoGridSkeleton";
+import { categories } from "@/data/videos";
+import { useVideos } from "@/hooks/useVideos";
 
 const Index = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("Semua");
 
+  const { videos, loading } = useVideos(activeCategory);
+
   const filteredVideos = useMemo(() => {
-    let result = videos;
+    if (!searchQuery) return videos;
 
-    // Filter by search query
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(
-        (video) =>
-          video.title.toLowerCase().includes(query) ||
-          video.channelName.toLowerCase().includes(query)
-      );
-    }
-
-    // Filter by category
-    if (activeCategory !== "Semua") {
-      result = result.filter((video) => video.category === activeCategory);
-    }
-
-    return result;
-  }, [searchQuery, activeCategory]);
+    const query = searchQuery.toLowerCase();
+    return videos.filter(
+      (video) =>
+        video.title.toLowerCase().includes(query) ||
+        video.channelName.toLowerCase().includes(query)
+    );
+  }, [searchQuery, videos]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -47,7 +41,11 @@ const Index = () => {
           onCategoryChange={setActiveCategory}
         />
         <div className="pb-8">
-          <VideoGrid videos={filteredVideos} sidebarOpen={sidebarOpen} />
+          {loading ? (
+            <VideoGridSkeleton sidebarOpen={sidebarOpen} />
+          ) : (
+            <VideoGrid videos={filteredVideos} sidebarOpen={sidebarOpen} />
+          )}
         </div>
       </main>
     </div>

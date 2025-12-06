@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, Compass, PlaySquare, ThumbsUp, Film, Upload, Settings, Video } from "lucide-react";
+import { Home, Compass, PlaySquare, ThumbsUp, Film, Upload, Settings, Video, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "./UserAvatar";
@@ -15,6 +15,7 @@ const mainItems = [
 ];
 
 const libraryItems = [
+  { icon: History, label: "History", path: "/history", requiresAuth: true },
   { icon: ThumbsUp, label: "Disukai", path: "/liked", requiresAuth: true },
   { icon: Film, label: "Video Saya", path: "/my-videos", requiresAuth: true },
 ];
