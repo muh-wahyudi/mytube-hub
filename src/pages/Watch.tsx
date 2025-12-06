@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { 
   ThumbsUp, 
@@ -16,7 +16,6 @@ import VideoCard from "@/components/VideoCard";
 import UserAvatar from "@/components/UserAvatar";
 import Comments from "@/components/Comments";
 import { Button } from "@/components/ui/button";
-import { videos } from "@/data/videos";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -58,11 +57,6 @@ const Watch = () => {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  // Check if it's a local video from data/videos.ts
-  const localVideo = useMemo(() => {
-    return videos.find((v) => v.videoID === videoID);
-  }, [videoID]);
-
   useEffect(() => {
     if (!videoID) {
       navigate('/');
@@ -71,27 +65,6 @@ const Watch = () => {
 
     const fetchVideo = async () => {
       setLoading(true);
-      
-      // First check if it's a local video
-      if (localVideo) {
-        setLoading(false);
-        // Get recommended videos from local
-        const recs = videos.filter((v) => v.videoID !== videoID).slice(0, 8);
-        setRecommendedVideos(recs.map(v => ({
-          videoID: v.videoID,
-          title: v.title,
-          channelName: v.channelName,
-          thumbnail: v.thumbnail,
-          channelAvatar: v.channelAvatar,
-          views: v.views,
-          uploadDate: v.uploadDate,
-          embedLink: v.embedLink,
-          description: v.description,
-          category: v.category,
-          duration: v.duration
-        })));
-        return;
-      }
 
       // Fetch from database
       const { data, error } = await supabase
@@ -129,6 +102,13 @@ const Watch = () => {
         .from('videos')
         .update({ views: (data.views || 0) + 1 })
         .eq('id', videoID);
+
+      // Save to watch history if user is logged in
+      if (user) {
+        await supabase
+          .from('watch_history')
+          .insert({ video_id: videoID, user_id: user.id });
+      }
 
       // Get like count
       const { count: likes } = await supabase
@@ -198,27 +178,12 @@ const Watch = () => {
         category: ''
       }));
 
-      // Add local videos to recommendations
-      const localRecs = videos.slice(0, 4).map(v => ({
-        videoID: v.videoID,
-        title: v.title,
-        channelName: v.channelName,
-        thumbnail: v.thumbnail,
-        channelAvatar: v.channelAvatar,
-        views: v.views,
-        uploadDate: v.uploadDate,
-        embedLink: v.embedLink,
-        description: v.description,
-        category: v.category,
-        duration: v.duration
-      }));
-
-      setRecommendedVideos([...formattedRecs, ...localRecs].slice(0, 8));
+      setRecommendedVideos(formattedRecs);
       setLoading(false);
     };
 
     fetchVideo();
-  }, [videoID, user, localVideo, navigate]);
+  }, [videoID, user, navigate]);
 
   const handleLike = async () => {
     if (!user) {
@@ -272,7 +237,7 @@ const Watch = () => {
   };
 
   // Video not found
-  if (!loading && !localVideo && !dbVideo) {
+  if (!loading && !dbVideo) {
     return (
       <div className="min-h-screen bg-background">
         <Header
@@ -315,7 +280,7 @@ const Watch = () => {
   }
 
   // Determine which video to display
-  const currentVideo = localVideo || (dbVideo ? {
+  const currentVideo = dbVideo ? {
     title: dbVideo.title,
     channelName: dbVideo.profiles.channel_name,
     channelAvatar: dbVideo.profiles.channel_avatar || undefined,
@@ -330,7 +295,7 @@ const Watch = () => {
     subscriberCount: `${subscriberCount}`,
     likes: `${likeCount}`,
     category: dbVideo.category
-  } : null);
+  } : null;
 
   if (!currentVideo) return null;
 
